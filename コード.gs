@@ -52,13 +52,13 @@ function writeLog(params){
   // 今日の日付を取得
   var date = new Date();
   //let txData1 = Utilities.formatDate( date, 'Asia/Tokyo', 'MMdd');  
-  let txDate1 = "_" + Utilities.formatDate( date, 'Asia/Tokyo', 'MM/dd');
+  let txDate1 = "'" + Utilities.formatDate( date, 'Asia/Tokyo', 'MM/dd');
   
   // 今日の日付列を取得
   let idCol1 = COL_DATA;
   for(idCol1 = COL_DATA; idCol1 < sheet1.getLastColumn(); idCol1++){
     // 日付行から日付を取得
-    let txDate2 = sheet1.getRange(1 + ROW_DATE, 1 + idCol1).getValue();
+    let txDate2 = "'" + sheet1.getRange(1 + ROW_DATE, 1 + idCol1).getValue();
     if(txDate2 == txDate1){
       break;
     }
@@ -105,18 +105,20 @@ function SendMessage(){
   // 今日の日付を取得
   var date = new Date();
   //let txData1 = Utilities.formatDate( date, 'Asia/Tokyo', 'MMdd');  
-  let txDate1 = "_" + Utilities.formatDate( date, 'Asia/Tokyo', 'MM/dd');
+  let txDate1 = "'" + Utilities.formatDate( date, 'Asia/Tokyo', 'MM/dd');
   
   // 今日の日付列を取得
   let idCol1 = COL_DATA;
   for(idCol1 = COL_DATA; idCol1 < sheet1.getLastColumn(); idCol1++){
     // 日付行から日付を取得
-    let txDate2 = sheet1.getRange(1 + ROW_DATE, 1 + idCol1).getValue();
+    let txDate2 = "'" + sheet1.getRange(1 + ROW_DATE, 1 + idCol1).getValue();
     if(txDate2 == txDate1){
       break;
     }
   }
   
+  let txMsg1 = "";
+  let flMsg1 = false;
   let idRow1;
   for(idRow1 = ROW_DATA; idRow1 < sheet1.getLastRow(); idRow1++){
     // 名称列から名称を取得
@@ -125,22 +127,25 @@ function SendMessage(){
     if(txOndo2 == ""){
       // 温度が記入されていない
       let txName2 = sheet1.getRange(1 + idRow1, 1 + COL_NAME).getValue();
-      
-      // 変更するのは、この部分だけ!
-      var payload = {
-        "token" : token,
-        "channel" : channel,
-        "text" : txName2 + "\n体温を入力してください。"
-      };
-      
-      var params = {
-        "method" : "post",
-        "payload" : payload
-      };
-      
-      // Slackに投稿する
-      let res1 = UrlFetchApp.fetch(url, params);
+      let txId2 = sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
+      flMsg1 = true;
+      txMsg1 = txMsg1 + "<@" + txId2 + ">";
     }
   }
-
+  
+  if(flMsg1){
+    var payload = {
+      "token" : token,
+      "channel" : channel,
+      "text" : txMsg1 + "\n体温を入力してください。"
+    };
+    
+    var params = {
+      "method" : "post",
+      "payload" : payload
+    };
+    
+    // Slackに投稿する
+    let res1 = UrlFetchApp.fetch(url, params);
+  }
 }
