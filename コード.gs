@@ -5,9 +5,12 @@ function doPost(e){
 }
 */
 
+// https://script.google.com/macros/s/AKfycby1lxGnLphhMjy-WrLsKglK5ZgEwBUFHVA_VTLUwD_QBIYrlOU/exec
 function doPost(e) {
-  
-  
+  let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet1 = spreadSheet1.getSheetByName("体温管理");
+  let sheet2 = spreadSheet1.getSheetByName("勤怠管理");
+    
   try{
     // トークンからスラックへのリンクを取得
     const token = PropertiesService.getScriptProperties().getProperty('SLACK_ACCESS_TOKEN');  
@@ -15,7 +18,16 @@ function doPost(e) {
     
     // ポストデータからパラメータを取得
     const params = JSON.parse(e.postData.getDataAsString());
-    writeLog(params);
+    //sheet2.getRange(1, 1).setValue(params);
+    
+    if(params.type == "SheetWrite"){
+      // シート書き込み要求
+      writeLog2(params);
+    }
+    else{
+      // slackからの情報
+      writeLog(params);
+    }    
 
     return ContentService.createTextOutput(params.challenge);
     
@@ -25,11 +37,147 @@ function doPost(e) {
 }
 
 // スプレッドシートの行、列情報
-const ROW_DATE = 0;
-const ROW_DATA = 1;
-const COL_NAME = 0;
-const COL_ID = 1;
-const COL_DATA = 2;
+const ROW_DATE = 3 - 1;
+const ROW_DATA = 4 - 1;
+const N_ROW_DATA = 3;
+const ROW_DATA_HIS = 1 - 1;
+const ROW_DATA_STA = 2 - 1;
+const ROW_DATA_END = 3 - 1;
+const COL_NAME = 2 - 1;
+const COL_ID = 1 - 1;
+const COL_DATA = 5 - 1;
+const COL_SVR = 4 - 1;
+const COL_STT = COL_SVR + 1;
+const COL_PLACE = COL_STT + 1;
+const COL_CPT = COL_PLACE + 1;
+const COL_DATA2 = COL_CPT + 1;
+
+function writeLog2(params){
+  let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet1 = spreadSheet1.getSheetByName("勤怠管理");
+   
+  let flNew1 = true;
+  let txName1 = params.name;
+  let txId1 = params.id;
+  let txAftSvr1 = params.AftSvr;
+  let txAftChn1 = params.AftChn;
+  let txBefSvr1 = params.BefSvr;
+  let txBefChn1 = params.BefChn;
+  
+  if(txAftChn1 != ""){
+
+    let idRow1;
+    for(idRow1 = ROW_DATA; idRow1 < sheet1.getLastRow(); idRow1 += N_ROW_DATA){
+      // ID列からIDを取得
+      let txId2 = sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
+      if(txId2 == txId1){
+        // IDがすでに存在
+        flNew1 = false;
+        break;
+      }
+    }
+    
+    if(flNew1){
+      // IDを記載
+      sheet1.getRange(1 + idRow1, 1 + COL_ID).setValue(txId1);
+      
+      // 見出しを記載
+      sheet1.getRange(1 + idRow1 + ROW_DATA_HIS, 1 + COL_CPT).setValue("勤怠履歴");
+      sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + COL_CPT).setValue("出勤");
+      sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + COL_CPT).setValue("退勤");
+      
+      // 行のグループ化を行います。
+      sheet1.getRange(1 + idRow1 + 1, 1, N_ROW_DATA - 1).shiftRowGroupDepth(1);
+    }
+    // 名前を更新
+    sheet1.getRange(1 + idRow1, 1 + COL_NAME).setValue(txName1);
+    
+    // サーバを更新
+    sheet1.getRange(1 + idRow1, 1 + COL_SVR).setValue(txAftSvr1);
+    // 状態を更新
+    sheet1.getRange(1 + idRow1, 1 + COL_STT).setValue(txAftChn1);
+    
+    let txChn1 = "C01AG9H3GBF";
+    if(txAftChn1 == "出社"){
+      // 場所を更新
+      if(sheet1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() != ""){
+        PostMessage(txName1 + "がテレワークを終了し、出社しました。", txChn1);
+        sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("");
+      }
+    }
+    else if(txAftChn1 == "テレワーク開始"){
+      // 場所を更新
+      if(sheet1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() == ""){
+        PostMessage(txName1 + "がテレワークを開始しました。", txChn1);
+        sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("テレワーク中");
+      }
+    }
+    else if(txAftChn1 == "退勤"){
+      if(sheet1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() != ""){
+        PostMessage(txName1 + "がテレワークを終了しました", txChn1);
+        sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("");
+      }
+    }
+    
+    if(txAftChn1 == "出社" || txAftChn1 == "退勤"){
+      // 場所を更新
+      sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("");
+    }
+    else if(txAftChn1 == "テレワーク開始"){
+      // 場所を更新
+      sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("テレワーク中");
+    }
+    
+    // 今日の日付を取得
+    var date = new Date();
+    //let txData1 = Utilities.formatDate( date, 'Asia/Tokyo', 'MMdd');  
+    let txDate1 = "'" + Utilities.formatDate( date, 'Asia/Tokyo', 'MM/dd');
+    let txTime1 = Utilities.formatDate( date, 'Asia/Tokyo', 'HH:mm');
+    
+    // 今日の日付列を取得
+    let idCol1 = COL_DATA2;
+    for(idCol1 = COL_DATA2; idCol1 < sheet1.getLastColumn(); idCol1++){
+      // 日付行から日付を取得
+      let txDate2 = "'" + sheet1.getRange(1 + ROW_DATE, 1 + idCol1).getValue();
+      if(txDate2 == txDate1){
+        break;
+      }
+    }
+    
+    // 日付を更新
+    sheet1.getRange(1 + ROW_DATE, 1 + idCol1).setValue(txDate1);
+    
+    let txHis1 = sheet1.getRange(1 + idRow1 + ROW_DATA_HIS, 1 + idCol1).getValue();
+    let txSta1 = sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + idCol1).getValue();
+    let txEnd1 = sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + idCol1).getValue();
+    if(txAftChn1 == "出社" || txAftChn1 == "テレワーク開始"){
+      if(txSta1 == ""){
+        // 出社ずみでなければ記録
+        sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + idCol1).setValue(txTime1);
+      }
+    }
+    else if(txAftChn1 == "退勤"){
+      if(txSta1 == ""){
+        // 出社済みでなければ日を跨いでいるので、昨日の退勤とする。
+        if(idCol1 - 1 >= COL_DATA2){
+          sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + idCol1 - 1).setValue(txTime1);
+        }
+      }
+      else{
+        // 退勤済みでも記録
+        sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + idCol1).setValue(txTime1);
+      }
+    }
+
+    if(txHis1 != ""){
+      txHis1 = txHis1 + "⇒";
+    }
+    txHis1 = txHis1 + "["+ txTime1 + "]" + txAftChn1;
+    sheet1.getRange(1 + idRow1, 1 + idCol1).setValue(txHis1);
+  }
+  
+}
+
 
 function writeLog(params){
   let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
@@ -37,31 +185,12 @@ function writeLog(params){
   const channel = params.event.channel;
 
   Logger.log(params);
-  
+    
   let txName1 = getUserName(params.event.user);
+  let txId1 = params.event.user;
 
-  let idRow1;
-  for(idRow1 = ROW_DATA; idRow1 < sheet1.getLastRow(); idRow1++){
-    // 名称列から名称を取得
-    let txName2 = sheet1.getRange(1 + idRow1, 1 + COL_NAME).getValue();
-    if(txName2 == txName1){
-      break;
-    }
-  }
-  
-  // 今日の日付を取得
-  var date = new Date();
-  //let txData1 = Utilities.formatDate( date, 'Asia/Tokyo', 'MMdd');  
-  let txDate1 = "'" + Utilities.formatDate( date, 'Asia/Tokyo', 'MM/dd');
-  
-  // 今日の日付列を取得
-  let idCol1 = COL_DATA;
-  for(idCol1 = COL_DATA; idCol1 < sheet1.getLastColumn(); idCol1++){
-    // 日付行から日付を取得
-    let txDate2 = "'" + sheet1.getRange(1 + ROW_DATE, 1 + idCol1).getValue();
-    if(txDate2 == txDate1){
-      break;
-    }
+  if(txName1 == "KintaiKanri"){
+    return;
   }
   
   // テキストから体温のみ抽出
@@ -69,38 +198,27 @@ function writeLog(params){
   let idChrSta1 = txVal1.indexOf("\n");
   txVal1 = txVal1.slice(idChrSta1 + 1);
   
-  // 日付を更新
-  sheet1.getRange(1 + ROW_DATE, 1 + idCol1).setValue(txDate1);
-  // 名前を更新
-  sheet1.getRange(1 + idRow1, 1 + COL_NAME).setValue(txName1);
-  // 念のためIDを更新
-  sheet1.getRange(1 + idRow1, 1 + COL_ID).setValue(params.event.user);
-  // 今日の体温を更新
-  sheet1.getRange(1 + idRow1, 1 + idCol1).setValue(txVal1);
-
-  // デバッグ用
-  //sheet1.getRange(1 + ROW_DATE, 1 + COL_NAME).setValue(params);
-}
-
-// ユーザ名を取得
-function getUserName(userId){
-  const token = PropertiesService.getScriptProperties().getProperty('SLACK_ACCESS_TOKEN');  
-  const userData = UrlFetchApp.fetch("https://slack.com/api/users.info?token="+token+"&user="+userId).getContentText();
-
-  const userName = JSON.parse(userData).user.real_name;
-  Logger.log(userId,userName);
-
-  return userName ? userName : userId; 
-}
-
-// メッセージを送信
-function SendMessage(){
-  let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet1 = spreadSheet1.getSheetByName("体温管理");
-
-  var url = "https://slack.com/api/chat.postMessage";
-  var token = PropertiesService.getScriptProperties().getProperty('SLACK_ACCESS_TOKEN');
-  var channel = "C019TVCKLEB";
+  if(txVal1.match(/^\d\d\d$/g)) {
+    // (365)
+    txVal1 = txVal1.substr(0,2) + "." + txVal1.substr(2,1);
+  }   
+  else if(txVal1.match(/^\d\d(\.\d)?$/g)) {
+    // (36.0、36)
+  } 
+  else{
+    // 体温ではない(36、36.5、365)
+    PostMessage("「"+ txVal1 + "」"+ "\n入力が無効です。\n例:36.2、36、362", "@" + txId1);
+    return;
+  }
+  
+  let idRow1;
+  for(idRow1 = ROW_DATA; idRow1 < sheet1.getLastRow(); idRow1++){
+    // ID列からIDを取得
+    let txId2 = sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
+    if(txId2 == txId1){
+      break;
+    }
+  }
   
   // 今日の日付を取得
   var date = new Date();
@@ -117,8 +235,58 @@ function SendMessage(){
     }
   }
   
-  let txMsg1 = "";
-  let flMsg1 = false;
+  // 日付を更新
+  sheet1.getRange(1 + ROW_DATE, 1 + idCol1).setValue(txDate1);
+  // 名前を更新
+  sheet1.getRange(1 + idRow1, 1 + COL_NAME).setValue(txName1);
+  // 念のためIDを更新
+  sheet1.getRange(1 + idRow1, 1 + COL_ID).setValue(txId1);
+  // 今日の体温を更新
+  sheet1.getRange(1 + idRow1, 1 + idCol1).setValue(txVal1);
+
+  // デバッグ用
+  //sheet1.getRange(1 + ROW_DATE, 1 + COL_NAME).setValue(params);
+}
+
+
+
+
+// ユーザ名を取得
+function getUserName(userId){
+  const token = PropertiesService.getScriptProperties().getProperty('SLACK_ACCESS_TOKEN');  
+  const userData = UrlFetchApp.fetch("https://slack.com/api/users.info?token="+token+"&user="+userId).getContentText();
+
+  let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet1 = spreadSheet1.getSheetByName("体温管理");
+
+  const userInfo = JSON.parse(userData).user;  
+  const userProf =userInfo.profile;
+  const userName1 = userProf.display_name;
+  const userName2 = userInfo.real_name;
+
+  return userName1 ? userName1 : (userName2 ? userName2 : userId); 
+}
+
+// メッセージを送信
+function SendMessage(){
+  let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet1 = spreadSheet1.getSheetByName("体温管理");
+
+  // 今日の日付を取得
+  var date = new Date();
+  //let txData1 = Utilities.formatDate( date, 'Asia/Tokyo', 'MMdd');  
+  let txDate1 = "'" + Utilities.formatDate( date, 'Asia/Tokyo', 'MM/dd');
+  
+  // 今日の日付列を取得
+  let idCol1 = COL_DATA;
+  for(idCol1 = COL_DATA; idCol1 < sheet1.getLastColumn(); idCol1++){
+    // 日付行から日付を取得
+    let txDate2 = "'" + sheet1.getRange(1 + ROW_DATE, 1 + idCol1).getValue();
+    if(txDate2 == txDate1){
+      break;
+    }
+  }
+  
   let idRow1;
   for(idRow1 = ROW_DATA; idRow1 < sheet1.getLastRow(); idRow1++){
     // 名称列から名称を取得
@@ -128,16 +296,19 @@ function SendMessage(){
       // 温度が記入されていない
       let txName2 = sheet1.getRange(1 + idRow1, 1 + COL_NAME).getValue();
       let txId2 = sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
-      flMsg1 = true;
-      txMsg1 = txMsg1 + "<@" + txId2 + ">";
+      PostMessage("体温を入力してください", "@"+txId2);
     }
   }
-  
-  if(flMsg1){
-    var payload = {
+}
+
+function PostMessage(txMsg1, txChn1){
+  var url = "https://slack.com/api/chat.postMessage";  
+  var token = PropertiesService.getScriptProperties().getProperty('SLACK_ACCESS_TOKEN');
+
+  var payload = {
       "token" : token,
-      "channel" : channel,
-      "text" : txMsg1 + "\n体温を入力してください。"
+      "channel" : txChn1,
+      "text" : txMsg1
     };
     
     var params = {
@@ -147,5 +318,4 @@ function SendMessage(){
     
     // Slackに投稿する
     let res1 = UrlFetchApp.fetch(url, params);
-  }
 }
