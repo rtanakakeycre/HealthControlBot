@@ -22,7 +22,7 @@ function doPost(e) {
     
     if(params.type == "SheetWrite"){
       // シート書き込み要求
-      writeLog2(params);
+      writeLog2(params.name, params.id, params.AftSvr, params.AftChn, params.BefSvr, params.BefChn);
     }
     else{
       // slackからの情報
@@ -35,6 +35,8 @@ function doPost(e) {
     writeLog(err);
   }
 }
+
+
 
 // スプレッドシートの行、列情報
 const ROW_DATE = 3 - 1;
@@ -52,133 +54,192 @@ const COL_PLACE = COL_STT + 1;
 const COL_CPT = COL_PLACE + 1;
 const COL_DATA2 = COL_CPT + 1;
 
-function writeLog2(params){
+function Test()
+{
+  //writeLog2("田中良平", "730250456168792000", "", "", "テストサーバー", "テストチャンネル");
+  writeLog2("田中良平", "730250456168792000", "テストサーバー", "テストチャンネル2", "", "");
+}
+
+function Test2()
+{
+  writeLog2("田中良平", "730250456168792000", "", "", "テストサーバー", "テストチャンネル");
+  //writeLog2("田中良平", "730250456168792000", "テストサーバー", "テストチャンネル2", "", "");
+}
+
+function writeLog2(txName1, txId1, txAftSvr1, txAftChn1, txBefSvr1, txBefChn1){
   let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
   let sheet1 = spreadSheet1.getSheetByName("勤怠管理");
    
   let flNew1 = true;
-  let txName1 = params.name;
-  let txId1 = params.id;
-  let txAftSvr1 = params.AftSvr;
-  let txAftChn1 = params.AftChn;
-  let txBefSvr1 = params.BefSvr;
-  let txBefChn1 = params.BefChn;
   
-  if(txAftChn1 != ""){
-
-    let idRow1;
-    for(idRow1 = ROW_DATA; idRow1 < sheet1.getLastRow(); idRow1 += N_ROW_DATA){
-      // ID列からIDを取得
-      let txId2 = sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
-      if(txId2 == txId1){
-        // IDがすでに存在
-        flNew1 = false;
-        break;
-      }
+  // 今日の日付を取得
+  var date = Moment.moment();
+  //let txData1 = Utilities.formatDate( date, 'Asia/Tokyo', 'MMdd');  
+  let txDate1 = "'" + date.format("MM/DD");
+  let txTime1 = date.format("HH:mm");
+  
+  let idRow1;
+  for(idRow1 = ROW_DATA; idRow1 < sheet1.getLastRow(); idRow1 += N_ROW_DATA){
+    // ID列からIDを取得
+    let txId2 = sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
+    if(txId2 == txId1){
+      // IDがすでに存在
+      flNew1 = false;
+      break;
     }
-    
-    if(flNew1){
-      // IDを記載
-      sheet1.getRange(1 + idRow1, 1 + COL_ID).setValue(txId1);
-      
-      // 見出しを記載
-      sheet1.getRange(1 + idRow1 + ROW_DATA_HIS, 1 + COL_CPT).setValue("勤怠履歴");
-      sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + COL_CPT).setValue("出勤");
-      sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + COL_CPT).setValue("退勤");
-      
-      // 行のグループ化を行います。
-      sheet1.getRange(1 + idRow1 + 1, 1, N_ROW_DATA - 1).shiftRowGroupDepth(1);
-    }
-    // 名前を更新
-    sheet1.getRange(1 + idRow1, 1 + COL_NAME).setValue(txName1);
-    
-    // サーバを更新
-    sheet1.getRange(1 + idRow1, 1 + COL_SVR).setValue(txAftSvr1);
-    // 状態を更新
-    sheet1.getRange(1 + idRow1, 1 + COL_STT).setValue(txAftChn1);
-    
-    let txChn1 = "C01AG9H3GBF";
-    if(txAftChn1 == "出社"){
-      // 場所を更新
-      if(sheet1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() != ""){
-        PostMessage(txName1 + "がテレワークを終了し、出社しました。", txChn1);
-        sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("");
-      }
-    }
-    else if(txAftChn1 == "テレワーク開始"){
-      // 場所を更新
-      if(sheet1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() == ""){
-        PostMessage(txName1 + "がテレワークを開始しました。", txChn1);
-        sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("テレワーク中");
-      }
-    }
-    else if(txAftChn1 == "退勤"){
-      if(sheet1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() != ""){
-        PostMessage(txName1 + "がテレワークを終了しました", txChn1);
-        sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("");
-      }
-    }
-    
-    if(txAftChn1 == "出社" || txAftChn1 == "退勤"){
-      // 場所を更新
-      sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("");
-    }
-    else if(txAftChn1 == "テレワーク開始"){
-      // 場所を更新
-      sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("テレワーク中");
-    }
-    
-    // 今日の日付を取得
-    var date = new Date();
-    //let txData1 = Utilities.formatDate( date, 'Asia/Tokyo', 'MMdd');  
-    let txDate1 = "'" + Utilities.formatDate( date, 'Asia/Tokyo', 'MM/dd');
-    let txTime1 = Utilities.formatDate( date, 'Asia/Tokyo', 'HH:mm');
-    
-    // 今日の日付列を取得
-    let idCol1 = COL_DATA2;
-    for(idCol1 = COL_DATA2; idCol1 < sheet1.getLastColumn(); idCol1++){
-      // 日付行から日付を取得
-      let txDate2 = "'" + sheet1.getRange(1 + ROW_DATE, 1 + idCol1).getValue();
-      if(txDate2 == txDate1){
-        break;
-      }
-    }
-    
-    // 日付を更新
-    sheet1.getRange(1 + ROW_DATE, 1 + idCol1).setValue(txDate1);
-    
-    let txHis1 = sheet1.getRange(1 + idRow1 + ROW_DATA_HIS, 1 + idCol1).getValue();
-    let txSta1 = sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + idCol1).getValue();
-    let txEnd1 = sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + idCol1).getValue();
-    if(txAftChn1 == "出社" || txAftChn1 == "テレワーク開始"){
-      if(txSta1 == ""){
-        // 出社ずみでなければ記録
-        sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + idCol1).setValue(txTime1);
-      }
-    }
-    else if(txAftChn1 == "退勤"){
-      if(txSta1 == ""){
-        // 出社済みでなければ日を跨いでいるので、昨日の退勤とする。
-        if(idCol1 - 1 >= COL_DATA2){
-          sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + idCol1 - 1).setValue(txTime1);
-        }
-      }
-      else{
-        // 退勤済みでも記録
-        sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + idCol1).setValue(txTime1);
-      }
-    }
-
-    if(txHis1 != ""){
-      txHis1 = txHis1 + "⇒";
-    }
-    txHis1 = txHis1 + "["+ txTime1 + "]" + txAftChn1;
-    sheet1.getRange(1 + idRow1, 1 + idCol1).setValue(txHis1);
   }
   
+  if(flNew1){
+    // IDを記載
+    sheet1.getRange(1 + idRow1, 1 + COL_ID).setValue(txId1);
+    
+    // 見出しを記載
+    sheet1.getRange(1 + idRow1 + ROW_DATA_HIS, 1 + COL_CPT).setValue("勤怠履歴");
+    sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + COL_CPT).setValue("出勤");
+    sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + COL_CPT).setValue("退勤");
+    
+    // 行のグループ化を行います。
+    sheet1.getRange(1 + idRow1 + 1, 1, N_ROW_DATA - 1).shiftRowGroupDepth(1);
+  }
+  // 名前を更新
+  sheet1.getRange(1 + idRow1, 1 + COL_NAME).setValue(txName1);
+    
+  let txChn1 = "C01AG9H3GBF";
+  if(txAftChn1 == "出社"){
+    // 場所を更新
+    if(sheet1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() != ""){
+      PostMessage(txName1 + "がテレワークを終了し、出社しました。", txChn1);
+      sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("");
+    }
+  }
+  else if(txAftChn1 == "テレワーク開始"){
+    // 場所を更新
+    if(sheet1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() == ""){
+      PostMessage(txName1 + "がテレワークを開始しました。", txChn1);
+      sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("テレワーク中");
+    }
+  }
+  else if(txAftChn1 == "退勤"){
+    if(sheet1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() != ""){
+      PostMessage(txName1 + "がテレワークを終了しました", txChn1);
+      sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("");
+    }
+  }
+  
+  if(txAftChn1 == "出社" || txAftChn1 == "退勤"){
+    // 場所を更新
+    sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("");
+  }
+  else if(txAftChn1 == "テレワーク開始"){
+    // 場所を更新
+    sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("テレワーク中");
+  }
+    
+  // 今日の日付列を取得
+  let idCol1 = COL_DATA2;
+  let flNew2 = true;
+  for(idCol1 = sheet1.getLastColumn() - 1; idCol1 >= COL_DATA2; idCol1--){
+    // 日付行から日付を取得
+    let txDate2 = "'" + sheet1.getRange(1 + ROW_DATE, 1 + idCol1).getValue();
+    if(txDate2 == txDate1){
+      flNew2 = false;
+      break;
+    }
+  }
+  
+  if(flNew2){
+    idCol1 = sheet1.getLastColumn();
+    // 日付を更新
+    sheet1.getRange(1 + ROW_DATE, 1 + idCol1).setValue(txDate1);
+  }
+  
+  let flTime1 = true; 
+  if(txAftChn1 == ""){
+    // 退室時間を記録
+    sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + COL_STT).setValue(date.format("YYYY-MM-DD HH:mm"));
+  }
+  else{
+    let txDate2 = sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + COL_STT).getValue();
+    if(txDate2 != ""){
+      let date2 = Moment.moment(txDate2);
+      if(date.diff(date2, 'hours') >= 2){
+        // 退室から2時間以上
+        UpdHis(sheet1, idRow1, idCol1, "", "退勤", date2.format("HH:mm"), false);
+      }
+      else{
+        flTime1 = false;
+      }
+
+      // 退室時間を削除
+      sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + COL_STT).setValue("");
+    }
+  }
+    
+  UpdHis(sheet1, idRow1, idCol1, txAftSvr1, txAftChn1, txTime1, flTime1);
+
+  // 状態を更新
+  sheet1.getRange(1 + idRow1, 1 + COL_STT).setValue(txAftChn1);
+  // サーバを更新
+  sheet1.getRange(1 + idRow1, 1 + COL_SVR).setValue(txAftSvr1);
 }
 
+// ============================================================================
+// 勤怠履歴更新
+// ============================================================================
+function UpdHis(sheet1, idRow1, idCol1, txAftSvr1, txAftChn1, txTime1, flTime1){
+  let txSta1 = sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + idCol1).getValue();
+  let txEnd1 = sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + idCol1).getValue();
+  if(txAftChn1 == "出社" || txAftChn1 == "テレワーク開始"){
+    if(txSta1 == ""){
+      // 出社ずみでなければ記録
+      sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + idCol1).setValue(txTime1);
+    }
+  }
+  else{
+    if(txSta1 == ""){
+      // 出社済みでなければ日を跨いでいるので、昨日の扱いとする
+      idCol1 = idCol1 - 1;
+    }
+  }
 
+  let txHis1 = sheet1.getRange(1 + idRow1 + ROW_DATA_HIS, 1 + idCol1).getValue();
+  
+  if(idCol1 >= COL_DATA2){
+    if(txAftChn1 == "退勤"){
+      // 退勤済みでも記録
+      sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + idCol1).setValue(txTime1);
+    }
+  
+    if(txHis1 == ""){
+      txHis1 = txHis1 + "["+ txTime1 + "]";      
+    }
+    else{
+      if(txAftChn1 == "" || flTime1){
+        // 出るときは出た時間を記録
+        txHis1 = txHis1 + "⇒";
+        txHis1 = txHis1 + "["+ txTime1 + "]";              
+      }
+      else{
+        // 入ってくるときは最後に出た時間が入ってるはずなので、何も記載しない
+      }
+    }
+    
+    if(txAftSvr1 == "" || txAftSvr1 == "KEY_勤怠管理"){
+      
+    }
+    else{
+      if(sheet1.getRange(1 + idRow1, 1 + COL_SVR).getValue() != txAftSvr1){
+        txHis1 = txHis1 + "(" + txAftSvr1 + ")";
+      }
+    }
+    txHis1 = txHis1 + txAftChn1;
+    
+    // 履歴を更新
+    sheet1.getRange(1 + idRow1 + ROW_DATA_HIS, 1 + idCol1).setValue(txHis1);
+  }
+}
+
+// 体温を更新
 function writeLog(params){
   let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
   let sheet1 = spreadSheet1.getSheetByName("体温管理");
