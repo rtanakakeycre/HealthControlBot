@@ -47,6 +47,7 @@ const ROW_DATA_STA = 2 - 1;
 const ROW_DATA_END = 3 - 1;
 const COL_NAME = 2 - 1;
 const COL_ID = 1 - 1;
+const COL_SLK_ID = 3 - 1;
 const COL_DATA = 5 - 1;
 const COL_SVR = 4 - 1;
 const COL_STT = COL_SVR + 1;
@@ -104,50 +105,214 @@ function writeLog2(txName1, txId1, txAftSvr1, txAftChn1, txBefSvr1, txBefChn1){
   var dateNow1 = Moment.moment();
 
   if(txAftChn1 == ""){
-    // 退室の場合、退室時間を記録
-    sheet1.getRange(1 + idRow1, 1 + COL_OUT).setValue(dateNow1.format("YYYY-MM-DD HH:mm"));
-    // 状態を消去
-    sheet1.getRange(1 + idRow1, 1 + COL_STT).setValue(txAftChn1);
-    // サーバを消去
-    sheet1.getRange(1 + idRow1, 1 + COL_SVR).setValue(txAftSvr1);
+    let txNowChn1 = sheet1.getRange(1 + idRow1, 1 + COL_STT).getValue();
+    if(txNowChn1 == "退勤"){
+      // 退勤からの退室は無視
+    }
+    else{
+      // 退室の場合、退室時間を記録
+      sheet1.getRange(1 + idRow1, 1 + COL_OUT).setValue(dateNow1.format("YYYY-MM-DD HH:mm"));
+      // 状態を消去
+      sheet1.getRange(1 + idRow1, 1 + COL_STT).setValue(txAftChn1);
+    }
   }
   else{
-    // 入室の場合、前回の退室からの時間を取得
-    let txDate2 = sheet1.getRange(1 + idRow1, 1 + COL_OUT).getValue();
-    if(txDate2 == ""){
-      // ただの部屋移動
+    // 入室の場合、前回のチャンネルを確認
+    let txNowChn1 = sheet1.getRange(1 + idRow1, 1 + COL_STT).getValue();    
+    if(txNowChn1 != ""){
+      // 前回のチャンネルがある場合はただの部屋移動
       ChnSftExe(sheet1, dateNow1, idRow1, txAftSvr1, txAftChn1, txName1);
     }
     else{
       // 前回が退室の場合は「サーバ移動」、「退室⇒入室」、「退勤⇒出勤」のいずれか      
+      // 前回の退室からの時間を取得
+      let txDate2 = sheet1.getRange(1 + idRow1, 1 + COL_OUT).getValue();
       let dateOut1 = Moment.moment(txDate2);
       // 退室時間(分)
-//      let ctOutTime1 = dateNow1.diff(dateOut1, 'minutes');
-      //sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + COL_SVR).setValue(ctOutTime1);
-      ChnSftExe(sheet1, dateNow1, idRow1, txAftSvr1, txAftChn1, txName1);
+      let ctOutTime1 = dateNow1.clone().diff(dateOut1, 'minutes');
       
-//      if(ctOutTime1 >= 2){
-//        // 退室から2分以上は退室扱い
-//        ChnSftExe(sheet1, dateOut1, idRow1, "", "退室", txName1);
-//        ChnSftExe(sheet1, dateNow1, idRow1, txAftSvr1, txAftChn1, txName1);
-//      }
-//      else{
-//        // 退室から2分以内はサーバ移動
-//        ChnSftExe(sheet1, dateNow1, idRow1, txAftSvr1, txAftChn1, txName1);
-//      }
-//      // 退室時間を削除
-//      sheet1.getRange(1 + idRow1, 1 + COL_OUT).setValue("");
+      if(ctOutTime1 >= 240 && GetDayMnt(dateOut1) < 6 * 60 && 6 * 60 < GetDayMnt(dateNow1)){
+        // 退室から4時間以上かつ6:00をまたいでいた場合は退勤扱い
+        ChnSftExe(sheet1, dateOut1, idRow1, "", "退室", txName1);
+        ChnSftExe(sheet1, dateNow1, idRow1, txAftSvr1, txAftChn1, txName1);
+      }
+      else if(ctOutTime1 >= 2){
+        // 退室から2分以上は退室扱い
+        ChnSftExe(sheet1, dateOut1, idRow1, "", "退室", txName1);
+        ChnSftExe(sheet1, dateNow1, idRow1, txAftSvr1, txAftChn1, txName1);
+      }
+      else{
+        // 退室から2分以内はサーバ移動
+        ChnSftExe(sheet1, dateNow1, idRow1, txAftSvr1, txAftChn1, txName1);
+      }
     }
   }
 }
 
+// ============================================================================
+// 毎朝8時に退勤のチェックを行う
+// ============================================================================
+function Test5()
+{
+  let date1 = Moment.moment();
+  AkashiDakoku("退勤", date1);
+}
+
+// ============================================================================
+// 毎朝8時に退勤のチェックを行う
+// ============================================================================
+function AkashiDakoku(txType1, date1)
+{
+  var token = PropertiesService.getScriptProperties().getProperty('AKASHI_ACCESS_TOKEN');
+  var txToken1 = "3f29dbff-3742-45e7-b930-1ef029c4446e"
+  var txKigyoId1 = "keycre7127";
+ // var url = "https://atnd.ak4.jp/api/cooperation/" + txKigyoId1 + "/stamps?token=" + token + "&start_date=20200918000000&end_date=20200919000000"
+  //var url = "https://atnd.ak4.jp/api/cooperation/" + txKigyoId1 + "/staffs?token=" + token + "&page=2";
+  //var url = "https://atnd.ak4.jp/api/cooperation/" + txKigyoId1 + "/stamps?token=" + token + "&type=12&stampedAt=2020/09/23 18:30:00";
+  var url = "https://atnd.ak4.jp/api/cooperation/" + txKigyoId1 + "/stamps";
+  let txTime1 = date1.format("YYYY/MM/DD HH:mm:ss");
+
+//  11 : 出勤
+//  12 : 退勤
+//  21 : 直行
+//  22 : 直帰
+//  31 : 休憩入
+//  32 : 休憩戻
+  let tyType1 = "";
+  
+  if(txType1 == "退勤"){
+    // 退勤
+    tyType1 = "12";
+  }
+  else{
+    // 出勤
+    tyType1 = "11";
+  }
+  
+  var payload = {
+    "token" : txToken1,
+    "type" : tyType1,
+    "stampedAt" : txTime1
+  };
+  
+  var params = {
+    "method" : "post",
+    "payload" : payload
+  };
+  
+  try{ 
+    // Slackに投稿する
+    let res1 = UrlFetchApp.fetch(url, params);
+    
+    const resInfo1 = JSON.parse(res1);
+    if(resInfo1.success){
+      PostMessage("AKASHIに" + txType1 + "打刻がされました。\n" + txTime1, "@U015HK4AZ7T");
+    }
+  }
+  catch(e){
+    WrtErrLog(e);
+  }
+}
+
+// ============================================================================
+// 毎朝8時に退勤のチェックを行う
+// ============================================================================
+function KinChk()
+{
+  let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet1 = spreadSheet1.getSheetByName("勤怠管理");
+  
+  var dateNow1 = Moment.moment();
+  
+  // 昨日の列を取得
+  let idCol1 = GetDateCol(sheet1, dateNow1.clone().subtract(1, "d"));
+  if(idCol1 >= 0){
+    
+    let idRow1;
+    for(idRow1 = ROW_DATA; idRow1 < sheet1.getLastRow(); idRow1 += N_ROW_DATA){
+      let txHis1 = sheet1.getRange(1 + idRow1 + ROW_DATA_HIS, 1 + idCol1).getValue();
+      if(txHis1 != ""){
+        let txSta1 = sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + idCol1).getValue();
+        let txEnd1 = sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + idCol1).getValue();
+        if(txSta1 != "" && txEnd1 != ""){
+          // 打刻がそろっている
+        }
+        else{
+          // 打刻がそろっていない
+          let txSlackId1 = sheet1.getRange(1 + idRow1, 1 + COL_SLK_ID).getValue();
+          if(txSlackId1 != ""){
+            // SLACKIDがあればDMを送信
+            let txMsg1 = "[こちらテストで送信していますので無視してください。]\n"
+            if(txSta1 == "" && txEnd1 == ""){
+              txMsg1 = txMsg1 + "出勤と退勤がされていません。以下の時刻でよろしいですか？\n問題がある場合だけ、退勤連絡チャンネルより出退勤時刻を投稿してください。\n";
+            }
+            else if(txSta1 == ""){
+              txMsg1 = txMsg1 + "出勤がされていません。以下の時刻でよろしいですか？\n問題がある場合だけ、退勤連絡チャンネルより出退勤時刻を投稿してください。\n";
+            }
+            else{
+              txMsg1 = txMsg1 + "退勤がされていません。以下の時刻でよろしいですか？\n問題がある場合だけ、退勤連絡チャンネルより出退勤時刻を投稿してください。\n";
+            }
+            
+            let txTimeSta1 = txHis1.slice(1, 6);
+            let txDate2 = sheet1.getRange(1 + idRow1, 1 + COL_OUT).getValue();
+            let dateOut1 = Moment.moment(txDate2);
+            
+            let txTimeEnd1 = dateOut1.format("HH:mm");
+            
+            txMsg1 = txMsg1 + "出勤:" + txTimeSta1 + "\n"
+            txMsg1 = txMsg1 + "退勤:" + txTimeEnd1 + "\n"
+            
+            PostMessage(txMsg1, "@"+txSlackId1);
+          }
+        }
+      }
+    }
+  }
+}
+
+// ============================================================================
+// 指定した時間の0時からの経過分数を取得
+// ============================================================================
+function GetDayMnt(date1)
+{
+  let ctDayMnt1 = date1.clone().startOf('day').diff(date1, 'minutes');
+  return ctDayMnt1;
+}
+
+// ============================================================================
+// 指定の日付の列番号を取得
+// ============================================================================
+function GetDateCol(sheet1, date1){
+  let txDate1 = date1.clone().add(-6, "h").format("MM/DD");
+  // 打刻日付を取得
+  let idCol1 = 0;
+  // 日付行を右から検索
+  for(idCol1 = sheet1.getLastColumn() - 1; idCol1 >= COL_DATA2; idCol1--){
+    // 日付行から日付を取得
+    let txDate2 = sheet1.getRange(1 + ROW_DATE, 1 + idCol1).getValue();
+    if(txDate2 == txDate1){
+      // 発見
+      break;
+    }
+  }
+  
+  if(idCol1 < COL_DATA2){
+    idCol1 = -1;
+  }
+  return(idCol1);
+  
+}
+    
 // ============================================================================
 // チャンネル移動実行
 // ============================================================================
 function ChnSftExe(sheet1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
   try{
     // 打刻日付は翌日の6:00を区切りとする
-    let txDate1 = date1.subtract(6, "h").format("MM/DD");
+    let txDate1 = date1.clone().subtract(6, "h").format("MM/DD");
+    // subtractするとなにやらdate1自体が変化するみたいなので、戻してやる
+//    date1.add(6, "h")
+    //let txDate1 = date1.format("MM/DD");
     let txTime1 = date1.format("HH:mm");
     
     // 打刻日付を取得
@@ -169,8 +334,7 @@ function ChnSftExe(sheet1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
     }
     
     let idCol2 = idCol1;
-    let ctDayMnt1 = date1.startOf('day').diff(date1, 'minutes');
-    if(ctDayMnt1 >= 10 * 60){
+    if(GetDayMnt(date1) >= 10 * 60){
       // 10時以降なら前日の退勤がなかろうが本日の打刻として扱う
     }
     else{
@@ -205,8 +369,12 @@ function ChnSftExe(sheet1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
       // 退勤時は気にせず退勤打刻を行う
       sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + idCol2).setValue(txTime1);
     }
-    else{
-    //else if(txAftChn1 == "出社" || txAftChn1 == "テレワーク開始"){
+    else if(txAftChn1 == "退室"){
+      // 退室
+      // 退室は打刻情報は更新せず
+    }
+//    else{
+    else if(txAftChn1 == "出社" || txAftChn1 == "テレワーク開始"){
       // 退勤以外は出勤扱い
       // 出勤
       let txSta1 = sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + idCol2).getValue();
@@ -271,10 +439,15 @@ function ChnSftExe(sheet1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
     }
   }
   catch(e){
-    let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
-    let sheetErr1 = spreadSheet1.getSheetByName("エラーログ");
-    sheetErr1.getRange(1 + sheetErr1.getLastColumn(), 1).setValue(e);
+    WrtErrLog(e);
   }
+}
+
+function WrtErrLog(log)
+{
+  let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
+  let sheetErr1 = spreadSheet1.getSheetByName("エラーログ");
+  sheetErr1.getRange(1 + sheetErr1.getLastRow(), 1).setValue(log);
 }
 
 // ============================================================================
