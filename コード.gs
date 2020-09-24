@@ -70,6 +70,7 @@ function Test2()
 
 // 勤怠情報解析
 function writeLog2(txName1, txId1, txAftSvr1, txAftChn1, txBefSvr1, txBefChn1){
+  txId1 = "_" + txId1;
   let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
   let sheet1 = spreadSheet1.getSheetByName("勤怠管理");
    
@@ -155,16 +156,35 @@ function writeLog2(txName1, txId1, txAftSvr1, txAftChn1, txBefSvr1, txBefChn1){
 function Test5()
 {
   let date1 = Moment.moment();
-  AkashiDakoku("退勤", date1);
+  let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet1 = spreadSheet1.getSheetByName("エラーログ");
+
+  let txId1 = sheet1.getRange(1, 3).getValue();
+  let idMemRow1 = GetMemRow("Discord ID", txId1);
+  AkashiDakoku(idMemRow1, "退勤", date1);
 }
 
 // ============================================================================
 // 毎朝8時に退勤のチェックを行う
 // ============================================================================
-function AkashiDakoku(txType1, date1)
+function AkashiDakoku(idMemRow1, txType1, date1)
 {
+  WrtErrLog(idMemRow1);
+
+  if(idMemRow1 < 0){
+    return;
+  }  
+  
   var token = PropertiesService.getScriptProperties().getProperty('AKASHI_ACCESS_TOKEN');
-  var txToken1 = "3f29dbff-3742-45e7-b930-1ef029c4446e"
+  var txToken1 = GetMemVal(idMemRow1, "AKASHI Token");
+  
+  WrtErrLog(txToken1);
+  
+  if(txToken1 == ""){
+    // AKASHIトークンがなければ打刻は行わない
+    return;
+  }
+  
   var txKigyoId1 = "keycre7127";
  // var url = "https://atnd.ak4.jp/api/cooperation/" + txKigyoId1 + "/stamps?token=" + token + "&start_date=20200918000000&end_date=20200919000000"
   //var url = "https://atnd.ak4.jp/api/cooperation/" + txKigyoId1 + "/staffs?token=" + token + "&page=2";
@@ -206,7 +226,10 @@ function AkashiDakoku(txType1, date1)
     
     const resInfo1 = JSON.parse(res1);
     if(resInfo1.success){
-      PostMessage("AKASHIに" + txType1 + "打刻がされました。\n" + txTime1, "@U015HK4AZ7T");
+      let txSlkId1 = GetMemVal(idMemRow1, "Slack ID");
+      if(txSlkId1 != ""){                               
+        PostMessage("AKASHIに" + txType1 + "打刻がされました。\n" + txTime1, "@" + txSlkId1);
+      }
     }
   }
   catch(e){
@@ -242,15 +265,15 @@ function KinChk()
           let txSlackId1 = sheet1.getRange(1 + idRow1, 1 + COL_SLK_ID).getValue();
           if(txSlackId1 != ""){
             // SLACKIDがあればDMを送信
-            let txMsg1 = "[こちらテストで送信していますので無視してください。]\n"
+            let txMsg1 = "############こちらテストで送信していますので無視してください。##############\n"
             if(txSta1 == "" && txEnd1 == ""){
-              txMsg1 = txMsg1 + "出勤と退勤がされていません。以下の時刻でよろしいですか？\n問題がある場合だけ、退勤連絡チャンネルより出退勤時刻を投稿してください。\n";
+              txMsg1 = txMsg1 + "出勤と退勤がされていません。\n";
             }
             else if(txSta1 == ""){
-              txMsg1 = txMsg1 + "出勤がされていません。以下の時刻でよろしいですか？\n問題がある場合だけ、退勤連絡チャンネルより出退勤時刻を投稿してください。\n";
+              txMsg1 = txMsg1 + "出勤がされていません。\n";
             }
             else{
-              txMsg1 = txMsg1 + "退勤がされていません。以下の時刻でよろしいですか？\n問題がある場合だけ、退勤連絡チャンネルより出退勤時刻を投稿してください。\n";
+              txMsg1 = txMsg1 + "退勤がされていません。\n";
             }
             
             let txTimeSta1 = txHis1.slice(1, 6);
@@ -302,7 +325,85 @@ function GetDateCol(sheet1, date1){
   return(idCol1);
   
 }
+
+const ID_ROW_CPT = 1 - 1;
+const ID_ROW_DATA = ID_ROW_CPT + 1;
+const ID_COL_DATA = 3 - 1;
+
+// ============================================================================
+// ID管理シート行番号を取得
+// ============================================================================
+function GetMemRow(txCol1, txVal1)
+{
+  WrtErrLog(txVal1);
+  let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet1 = spreadSheet1.getSheetByName("ID管理");
+  let idCol1;
+  for(idCol1 = ID_COL_DATA; idCol1 < sheet1.getLastColumn(); idCol1++){
+    let txCol2 = sheet1.getRange(1 + ID_ROW_CPT, 1 + idCol1).getValue();
+    if(txCol2 == txCol1){
+      break;
+    }
+  }
+  
+  //WrtErrLog(txVal1);
+  if(idCol1 >= sheet1.getLastColumn()){
+    // 指定の列がありません。
+    WrtErrLog("列");
+    return(-1);
+  }
     
+  let idRow1;
+  for(idRow1 = ID_ROW_DATA; idRow1 < sheet1.getLastRow(); idRow1++){
+    let txVal2 = "'" + sheet1.getRange(1 + idRow1, 1 + idCol1).getValue();
+    
+    //WrtErrLog(txVal2 +" == "+txVal1);
+    
+    if(txVal2 == txVal1){
+      break;
+    }
+  }
+  
+  if(idRow1 >= sheet1.getLastRow()){
+    // 指定のIDがありません。
+    WrtErrLog("行");
+    return(-1);
+  }
+  
+  return(idRow1);
+}
+    
+// ============================================================================
+// ID管理シートパラメータを取得
+// ============================================================================
+function GetMemVal(idMemRow1, txCol1)
+{
+  if(idMemRow1 < 0){
+    // 指定の行がありません。
+    return("");
+  }
+
+  let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet1 = spreadSheet1.getSheetByName("ID管理");
+  let idCol1;
+  for(idCol1 = ID_COL_DATA; idCol1 < sheet1.getLastColumn(); idCol1++){
+    let txCol2 = sheet1.getRange(1 + ID_ROW_CPT, 1 + idCol1).getValue();
+    if(txCol2 == txCol1){
+
+      break;
+    }
+  }
+  
+  if(idCol1 >= sheet1.getLastColumn()){
+    // 指定の列がありません。
+    return("");
+  }
+  
+  let txVal1 = sheet1.getRange(1 + idMemRow1, 1 + idCol1).getValue()
+  
+  return(txVal1);
+}
+
 // ============================================================================
 // チャンネル移動実行
 // ============================================================================
@@ -368,6 +469,10 @@ function ChnSftExe(sheet1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
       // 退勤
       // 退勤時は気にせず退勤打刻を行う
       sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + idCol2).setValue(txTime1);
+      let txId3 = "'" + sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
+      //WrtErrLog(txId3);
+      let idMemRow1 = GetMemRow("Discord ID", txId3);
+      AkashiDakoku(idMemRow1, "退勤", date1);
     }
     else if(txAftChn1 == "退室"){
       // 退室
@@ -381,6 +486,9 @@ function ChnSftExe(sheet1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
       if(txSta1 == ""){
         // 出勤打刻なしなら出勤打刻を行う
         sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + idCol2).setValue(txTime1);
+        let txId3 = "'" + sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
+        let idMemRow1 = GetMemRow("Discord ID", txId3);
+        AkashiDakoku(idMemRow1, "出勤", date1);
       }
     }
     
