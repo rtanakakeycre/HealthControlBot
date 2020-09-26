@@ -465,13 +465,15 @@ function ChnSftExe(sheet1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
       }
     }    
     
+    let txId3 = "'" + sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
+    let idMemRow1 = GetMemRow("Discord ID", txId3);
     if(txAftChn1 == "退勤"){
       // 退勤
       // 退勤時は気にせず退勤打刻を行う
       sheet1.getRange(1 + idRow1 + ROW_DATA_END, 1 + idCol2).setValue(txTime1);
-      let txId3 = "'" + sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
+      //let txId3 = "'" + sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
       //WrtErrLog(txId3);
-      let idMemRow1 = GetMemRow("Discord ID", txId3);
+      //let idMemRow1 = GetMemRow("Discord ID", txId3);
       AkashiDakoku(idMemRow1, "退勤", date1);
     }
     else if(txAftChn1 == "退室"){
@@ -486,20 +488,23 @@ function ChnSftExe(sheet1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
       if(txSta1 == ""){
         // 出勤打刻なしなら出勤打刻を行う
         sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + idCol2).setValue(txTime1);
-        let txId3 = "'" + sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
-        let idMemRow1 = GetMemRow("Discord ID", txId3);
+        //let txId3 = "'" + sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
+        //let idMemRow1 = GetMemRow("Discord ID", txId3);
         AkashiDakoku(idMemRow1, "出勤", date1);
       }
     }
     
     //let txChn1 = "C01AG9H3GBF";
     let txChn1 = "C01805HS02F";
+    
     if(txAftChn1 == "出社"){
       // 場所を更新
       if(sheet1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() != ""){
         PostMessage(txName1 + "がテレワークを終了し、出社しました。", txChn1);
         sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("");
       }
+      // Irucaステータスを「在席」に変更
+      Iruca_WorkStartOffice(idMemRow1);
     }
     else if(txAftChn1 == "テレワーク開始"){
       // 場所を更新
@@ -507,12 +512,16 @@ function ChnSftExe(sheet1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
         PostMessage(txName1 + "がテレワークを開始しました。", txChn1);
         sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("テレワーク中");
       }
+      // Irucaステータスを「在席」テレワークに変更
+      Iruca_WorkStartHome(idMemRow1);
     }
     else if(txAftChn1 == "退勤"){
       if(sheet1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() != ""){
         PostMessage(txName1 + "がテレワークを終了しました", txChn1);
         sheet1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("");
       }
+      // Irucaステータスを「休暇」に変更
+      Iruca_WorkEnd(idMemRow1);
     }
     
     let txHis1 = sheet1.getRange(1 + idRow1 + ROW_DATA_HIS, 1 + idCol2).getValue();
@@ -544,6 +553,9 @@ function ChnSftExe(sheet1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
       sheet1.getRange(1 + idRow1, 1 + COL_STT).setValue(txAftChn1);
       // サーバを更新
       sheet1.getRange(1 + idRow1, 1 + COL_SVR).setValue(txAftSvr1);
+      
+      // Irucaメッセージを更新
+      Iruca_SetMessage(idMemRow1, txAftChn1);
     }
   }
   catch(e){
@@ -700,4 +712,148 @@ function PostMessage(txMsg1, txChn1){
     
     // Slackに投稿する
     let res1 = UrlFetchApp.fetch(url, params);
+}
+
+
+
+
+// ============================================================================
+// イルカ操作関数
+// ============================================================================
+
+// 指定ルームのメンバー情報取得
+function Iruca_getMenbers(roomid){
+  
+  // メンバーリスト取得API
+  var url = 'https://iruca.co/api/rooms/' + roomid + '/members';
+  
+  // APIにリクエストしJSONデータを受け取る
+  var response = UrlFetchApp.fetch(url);
+  if (response.getResponseCode() >= 400) {
+    // エラー
+    Logger.log('Error: status = ' + response.getResponseCode());
+    return null;
+  }
+  else{
+    //Logger.log(response);
+    return JSON.parse(response.getContentText());
+  }
+}
+
+// 個人単位のメンバー情報取得
+function Iruca_getMenber(roomid, memberid){
+  
+  if( roomid == "" ) return;
+  if( memberid == "" ) return;
+  
+  // メンバー取得API
+  var url = 'https://iruca.co/api/rooms/' + roomid + '/members/' + memberid;
+  
+  // APIにリクエストしJSONデータを受け取る
+  var response = UrlFetchApp.fetch(url);
+  if (response.getResponseCode() >= 400) {
+    // エラー
+    Logger.log('Error: status = ' + response.getResponseCode());
+    return null;
+  }
+  else{
+    //Logger.log(response);
+    return JSON.parse(response.getContentText());
+  }  
+}
+
+// メンバー状態を変更する
+function Iruca_setMemberStatus( roomid, id, status, msg ){
+  
+  if( roomid == "" ) return;
+  if( id == "" ) return;
+  
+  // メンバー情報更新API
+  var url = 'https://iruca.co/api/rooms/' + roomid + '/members/' + id;
+  
+  var payload = {
+    "status":status,
+    "message": msg
+  };
+  var params = {
+    "method": "put",
+    "contentType" : "application/json", //データの形式を指定
+    "payload" : JSON.stringify(payload),
+     muteHttpExceptions : true
+  };
+  
+  var response = UrlFetchApp.fetch(url,params);
+  if (response.getResponseCode() >= 400) {
+    // エラー
+    Logger.log('Error: SetMemverStatus ErrSts = ' + response.getResponseCode());
+  }
+}
+
+// 出社
+function Iruca_WorkStartOffice( idRow ){
+  if( idRow > 0 ){
+    let room_id = GetMemVal(idRow, "iruca ROOM ID");
+    let member_id = GetMemVal(idRow, "iruca Member ID");
+    //WrtErrLog( idRow + "," + room_id+ "," + member_id + ",出社" );
+    Iruca_setMemberStatus( room_id, member_id, "在席", "");
+  }
+}
+
+// テレワーク
+function Iruca_WorkStartHome( idRow ){
+  if( idRow > 0 ){
+    let room_id = GetMemVal(idRow, "iruca ROOM ID");
+    let member_id = GetMemVal(idRow, "iruca Member ID");
+    //WrtErrLog( idRow + "," + room_id+ "," + member_id + ",てれわーく");
+    Iruca_setMemberStatus( room_id, member_id, "在席", "[テレワーク]" );
+  }
+}
+
+// 退勤
+function Iruca_WorkEnd( idRow ){
+  if( idRow > 0 ){
+    let room_id = GetMemVal(idRow, "iruca ROOM ID");
+    let member_id = GetMemVal(idRow, "iruca Member ID");
+    //WrtErrLog( idRow + "," + room_id+ "," + member_id + ",退勤");
+    Iruca_setMemberStatus( room_id, member_id, "休暇", "" );
+  }
+}
+
+// メッセージ（一言）設定
+function Iruca_SetMessage( idRow, msg ){
+  if( idRow > 0 ){
+    let room_id = GetMemVal(idRow, "iruca ROOM ID");
+    let member_id = GetMemVal(idRow, "iruca Member ID");
+    
+    if(( room_id != "" ) && (member_id != "") ){
+      var member_inf = Iruca_getMenber( room_id, member_id );
+      //WrtErrLog( idRow + "," + room_id+ "," + member_id + "," + member_inf.message);
+      if( member_inf != null ){
+        if( member_inf.message.includes("[テレワーク]") ){
+          Iruca_setMemberStatus( room_id, member_id, member_inf.status , "[テレワーク]"+ msg);
+        }
+        else{
+          Iruca_setMemberStatus( room_id, member_id, member_inf.status , msg );
+        }
+      }
+    }
+  }
+}
+
+
+// メンバーの状態をデバッグ表示
+function Iruca_writeMenberList(members){
+  /*
+  let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet1 = spreadSheet1.getSheetByName("デバッグシート");
+
+  if( members != null ){
+    // メンバーの名前,状況を取得
+    for( i=0; i<members.length; i++ ){
+      if( members[i] != null ){
+        sheet1.appendRow([members[i].id ,members[i].name , members[i].status, members[i].message ]);
+      }
+    }
+  }
+  */
 }
