@@ -30,11 +30,9 @@ function doPost(e) {
     return ContentService.createTextOutput(jsPrm1.challenge);
     
   }catch(err){
-    UpdTaion(err);
+    AddLog(err);
   }
 }
-
-
 
 // スプレッドシートの行、列情報
 const ROW_DATE = 3 - 1;
@@ -163,72 +161,7 @@ function Test5()
 
   let txId1 = sht1.getRange(1, 3).getValue();
   let idMemRow1 = GetMemRow("Discord ID", txId1);
-  AkashiDakoku(idMemRow1, "退勤", date1);
-}
-
-// ============================================================================
-// AKASHIに打刻を行う
-// ============================================================================
-function AkashiDakoku(idMemRow1, txType1, date1)
-{
-  try{ 
-    if(idMemRow1 < 0){
-      return;
-    }  
-    
-    var txTkn1 = GetMemVal(idMemRow1, "AKASHI Token");
-    
-    if(txTkn1 == ""){
-      // AKASHIトークンがなければ打刻は行わない
-      return;
-    }
-    
-    var txKigyoId1 = "keycre7127";
-    var url = "https://atnd.ak4.jp/api/cooperation/" + txKigyoId1 + "/stamps";
-    let txTime1 = date1.format("YYYY/MM/DD HH:mm:ss");
-
-  //  11 : 出勤
-  //  12 : 退勤
-  //  21 : 直行
-  //  22 : 直帰
-  //  31 : 休憩入
-  //  32 : 休憩戻
-    let tyType1 = "";
-    
-    if(txType1 == "退勤"){
-      // 退勤
-      tyType1 = "12";
-    }
-    else{
-      // 出勤
-      tyType1 = "11";
-    }
-    
-    var jsPyl1 = {
-      "token" : txTkn1,
-      "type" : tyType1,
-      "stampedAt" : txTime1
-    };
-    
-    var jsPrm1 = {
-      "method" : "post",
-      "payload" : jsPyl1
-    };
-  
-    // Slackに投稿する
-    let res1 = UrlFetchApp.fetch(url, jsPrm1);
-    
-    const resInfo1 = JSON.parse(res1);
-    if(resInfo1.success){
-      let txSlkId1 = GetMemVal(idMemRow1, "Slack ID");
-      if(txSlkId1 != ""){                               
-        SendSlkMsg("AKASHIに" + txType1 + "打刻がされました。\n" + txTime1, "@" + txSlkId1);
-      }
-    }
-  }
-  catch(e){
-    AddLog(e);
-  }
+  Akashi_Dakoku(idMemRow1, "退勤", date1);
 }
 
 // ============================================================================
@@ -280,7 +213,7 @@ function ChkKintai()
             txMsg1 = txMsg1 + "出勤:" + txTimeSta1 + "\n"
             txMsg1 = txMsg1 + "退勤:" + txTimeEnd1 + "\n"
             
-            SendSlkMsg(txMsg1, "@"+txSlackId1);
+            Slack_SendMessage(txMsg1, "@"+txSlackId1);
           }
         }
       }
@@ -406,9 +339,6 @@ function ChnSftExe(sht1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
   try{
     // 打刻日付は翌日の6:00を区切りとする
     let txDate1 = date1.clone().subtract(6, "h").format("MM/DD");
-    // subtractするとなにやらdate1自体が変化するみたいなので、戻してやる
-//    date1.add(6, "h")
-    //let txDate1 = date1.format("MM/DD");
     let txTime1 = date1.format("HH:mm");
     
     // 打刻日付を取得
@@ -469,7 +399,7 @@ function ChnSftExe(sht1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
       //let txId3 = "'" + sheet1.getRange(1 + idRow1, 1 + COL_ID).getValue();
       //AddLog(txId3);
       //let idMemRow1 = GetMemRow("Discord ID", txId3);
-      AkashiDakoku(idMemRow1, "退勤", date1);
+      Akashi_Dakoku(idMemRow1, "退勤", date1);
     }
     else if(txAftChn1 == "退室"){
       // 退室
@@ -485,7 +415,7 @@ function ChnSftExe(sht1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
         sheet1.getRange(1 + idRow1 + ROW_DATA_STA, 1 + idCol2).setValue(txTime1);
         //let txId3 = "'" + sht1.getRange(1 + idRow1, 1 + COL_ID).getValue();
         //let idMemRow1 = GetMemRow("Discord ID", txId3);
-        AkashiDakoku(idMemRow1, "出勤", date1);
+        Akashi_Dakoku(idMemRow1, "出勤", date1);
       }
     }
     
@@ -495,7 +425,7 @@ function ChnSftExe(sht1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
     if(txAftChn1 == "出社"){
       // 場所を更新
       if(sht1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() != ""){
-        SendSlkMsg(txName1 + "がテレワークを終了し、出社しました。", txChn1);
+        Slack_SendMessage(txName1 + "がテレワークを終了し、出社しました。", txChn1);
         sht1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("");
       }
       // Irucaステータスを「在席」に変更
@@ -504,7 +434,7 @@ function ChnSftExe(sht1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
     else if(txAftChn1 == "テレワーク開始"){
       // 場所を更新
       if(sht1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() == ""){
-        SendSlkMsg(txName1 + "がテレワークを開始しました。", txChn1);
+        Slack_SendMessage(txName1 + "がテレワークを開始しました。", txChn1);
         sht1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("テレワーク中");
       }
       // Irucaステータスを「在席」テレワークに変更
@@ -512,7 +442,7 @@ function ChnSftExe(sht1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
     }
     else if(txAftChn1 == "退勤"){
       if(sht1.getRange(1 + idRow1, 1 + COL_PLACE).getValue() != ""){
-        SendSlkMsg(txName1 + "がテレワークを終了しました", txChn1);
+        Slack_SendMessage(txName1 + "がテレワークを終了しました", txChn1);
         sht1.getRange(1 + idRow1, 1 + COL_PLACE).setValue("");
       }
       // Irucaステータスを「休暇」に変更
@@ -558,13 +488,6 @@ function ChnSftExe(sht1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
   }
 }
 
-function AddLog(log)
-{
-  let book1 = SpreadsheetApp.getActiveSpreadsheet();
-  let sheetErr1 = book1.getSheetByName("エラーログ");
-  sheetErr1.getRange(1 + sheetErr1.getLastRow(), 1).setValue(log);
-}
-
 // ============================================================================
 // 体温を更新
 // ============================================================================
@@ -572,7 +495,7 @@ function UpdTaion(jsPrm1){
   let book1 = SpreadsheetApp.getActiveSpreadsheet();
   let sht1 = book1.getSheetByName("体温管理");
 
-  let txName1 = getUserName(jsPrm1.event.user);
+  let txName1 = Slack_GetDisplayName(jsPrm1.event.user);
   let txId1 = jsPrm1.event.user;
 
   if(txName1 == "KintaiKanri"){
@@ -593,7 +516,7 @@ function UpdTaion(jsPrm1){
   } 
   else{
     // 体温ではない(36、36.5、365)
-    SendSlkMsg("「"+ txVal1 + "」"+ "\n入力が無効です。\n例:36.2、36、362", "@" + txId1);
+    Slack_SendMessage("「"+ txVal1 + "」"+ "\n入力が無効です。\n例:36.2、36、362", "@" + txId1);
     return;
   }
   
@@ -608,7 +531,6 @@ function UpdTaion(jsPrm1){
   
   // 今日の日付を取得
   var date = new Date();
-  //let txData1 = Utilities.formatDate( date, 'Asia/Tokyo', 'MMdd');  
   let txDate1 = "'" + Utilities.formatDate( date, 'Asia/Tokyo', 'MM/dd');
   
   // 今日の日付列を取得
@@ -632,25 +554,6 @@ function UpdTaion(jsPrm1){
 
   // デバッグ用
   //sht1.getRange(1 + ROW_DATE, 1 + COL_NAME).setValue(jsPrm1);
-}
-
-
-// ============================================================================
-// SlackのIDからSlackの表示名を取得
-// ============================================================================
-function getUserName(txSlkId1){
-  const txTkn1 = PropertiesService.getScriptProperties().getProperty('SLACK_ACCESS_TOKEN');  
-  const userData = UrlFetchApp.fetch("https://slack.com/api/users.info?token="+txTkn1+"&user="+txSlkId1).getContentText();
-
-  let book1 = SpreadsheetApp.getActiveSpreadsheet();
-  let sht1 = book1.getSheetByName("体温管理");
-
-  const userInfo = JSON.parse(userData).user;  
-  const userProf =userInfo.profile;
-  const userName1 = userProf.display_name;
-  const userName2 = userInfo.real_name;
-
-  return userName1 ? userName1 : (userName2 ? userName2 : txSlkId1); 
 }
 
 // メッセージを送信
@@ -681,7 +584,7 @@ function SendMessage(){
       // 温度が記入されていない
       let txName2 = sht1.getRange(1 + idRow1, 1 + COL_NAME).getValue();
       let txId2 = sht1.getRange(1 + idRow1, 1 + COL_ID).getValue();
-      SendSlkMsg("体温を入力してください", "@"+txId2);
+      Slack_SendMessage("体温を入力してください", "@"+txId2);
     }
   }
 }
@@ -690,7 +593,7 @@ function SendMessage(){
 // Slackにメッセージを送信
 // txChn1:@ユーザIDを指定するとDMを送信できます。
 // ============================================================================
-function SendSlkMsg(txMsg1, txChn1){
+function Slack_SendMessage(txMsg1, txChn1){
   var url = "https://slack.com/api/chat.postMessage";  
   var txTkn1 = PropertiesService.getScriptProperties().getProperty('SLACK_ACCESS_TOKEN');
 
@@ -709,8 +612,88 @@ function SendSlkMsg(txMsg1, txChn1){
     let res1 = UrlFetchApp.fetch(url, jsPrm1);
 }
 
+// ============================================================================
+// SlackのIDからSlackの表示名を取得
+// ============================================================================
+function Slack_GetDisplayName(txSlkId1){
+  const txTkn1 = PropertiesService.getScriptProperties().getProperty('SLACK_ACCESS_TOKEN');  
+  const userData = UrlFetchApp.fetch("https://slack.com/api/users.info?token="+txTkn1+"&user="+txSlkId1).getContentText();
 
+  let book1 = SpreadsheetApp.getActiveSpreadsheet();
+  let sht1 = book1.getSheetByName("体温管理");
 
+  const userInfo = JSON.parse(userData).user;  
+  const userProf =userInfo.profile;
+  const userName1 = userProf.display_name;
+  const userName2 = userInfo.real_name;
+
+  return userName1 ? userName1 : (userName2 ? userName2 : txSlkId1); 
+}
+
+// ============================================================================
+// AKASHIに打刻を行う
+// ============================================================================
+function Akashi_Dakoku(idMemRow1, txType1, date1)
+{
+  try{ 
+    if(idMemRow1 < 0){
+      return;
+    }  
+    
+    var txTkn1 = GetMemVal(idMemRow1, "AKASHI Token");
+    
+    if(txTkn1 == ""){
+      // AKASHIトークンがなければ打刻は行わない
+      return;
+    }
+    
+    var txKigyoId1 = "keycre7127";
+    var url = "https://atnd.ak4.jp/api/cooperation/" + txKigyoId1 + "/stamps";
+    let txTime1 = date1.format("YYYY/MM/DD HH:mm:ss");
+
+  //  11 : 出勤
+  //  12 : 退勤
+  //  21 : 直行
+  //  22 : 直帰
+  //  31 : 休憩入
+  //  32 : 休憩戻
+    let tyType1 = "";
+    
+    if(txType1 == "退勤"){
+      // 退勤
+      tyType1 = "12";
+    }
+    else{
+      // 出勤
+      tyType1 = "11";
+    }
+    
+    var jsPyl1 = {
+      "token" : txTkn1,
+      "type" : tyType1,
+      "stampedAt" : txTime1
+    };
+    
+    var jsPrm1 = {
+      "method" : "post",
+      "payload" : jsPyl1
+    };
+  
+    // Slackに投稿する
+    let res1 = UrlFetchApp.fetch(url, jsPrm1);
+    
+    const resInfo1 = JSON.parse(res1);
+    if(resInfo1.success){
+      let txSlkId1 = GetMemVal(idMemRow1, "Slack ID");
+      if(txSlkId1 != ""){                               
+        Slack_SendMessage("AKASHIに" + txType1 + "打刻がされました。\n" + txTime1, "@" + txSlkId1);
+      }
+    }
+  }
+  catch(e){
+    AddLog(e);
+  }
+}
 
 // ============================================================================
 // イルカ操作関数
@@ -851,4 +834,14 @@ function Iruca_writeMenberList(members){
     }
   }
   */
+}
+
+// ============================================================================
+// デバッグ用ログ出力
+// ============================================================================
+function AddLog(log)
+{
+  let book1 = SpreadsheetApp.getActiveSpreadsheet();
+  let sheetErr1 = book1.getSheetByName("エラーログ");
+  sheetErr1.getRange(1 + sheetErr1.getLastRow(), 1).setValue(log);
 }
