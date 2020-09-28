@@ -14,7 +14,11 @@ function doPost(e){
 // ============================================================================
 function doPost(e) {
    
+  var lock = LockService.getPublicLock();  
   try{    
+    //30秒間ロック
+    lock.waitLock(30000);
+
     // ポストデータからパラメータを取得
     const jsPrm1 = JSON.parse(e.postData.getDataAsString());
     
@@ -27,7 +31,9 @@ function doPost(e) {
     else{
       // slackからの情報
       Taion_Update(jsPrm1);
-    }    
+    }
+    
+    lock.releaseLock();
 
     return ContentService.createTextOutput(jsPrm1.challenge);
     
@@ -201,9 +207,8 @@ function Kintai_Analyze(txName1, txDscId1, txAftSvr1, txAftChn1, txBefSvr1, txBe
   // DiscordIDは「_」付きで管理しているため「_」を付加
   let txId1 = "_" + txDscId1;
    
-  let flNew1 = true;
   // IDから対応メンバーの行を取得
-  let [idRow1, flNew1] = GetIdRow(txId1, SHT_KIN_DATA_ROW, SHT_KIN_MEM_NUM_ROW, SHT_KIN_ID_COL);
+  let [idRow1, flNew1] = GetIdRow(txId1, sht1, SHT_KIN_DATA_ROW, SHT_KIN_MEM_NUM_ROW, SHT_KIN_ID_COL);
   
   if(flNew1){
     // IDを記載
@@ -224,13 +229,14 @@ function Kintai_Analyze(txName1, txDscId1, txAftSvr1, txAftChn1, txBefSvr1, txBe
   var dateNow1 = Moment.moment();
 
   if(txAftChn1 == ""){
+    // 退室の場合、退室時間を記録
+    sht1.getRange(1 + idRow1, 1 + SHT_KIN_OUT_TIME_COL).setValue(dateNow1.format("YYYY-MM-DD HH:mm"));
+
     let txNowChn1 = sht1.getRange(1 + idRow1, 1 + SHT_KIN_STT_COL).getValue();
     if(txNowChn1 == "退勤"){
       // 退勤からの退室は無視
     }
     else{
-      // 退室の場合、退室時間を記録
-      sht1.getRange(1 + idRow1, 1 + SHT_KIN_OUT_TIME_COL).setValue(dateNow1.format("YYYY-MM-DD HH:mm"));
       // 状態を消去
       sht1.getRange(1 + idRow1, 1 + SHT_KIN_STT_COL).setValue(txAftChn1);
     }
@@ -326,13 +332,13 @@ function Kintai_Update(sht1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
       }
     }    
     
-    let txId3 = "'" + sheet1.getRange(1 + idRow1, 1 + SHT_TAI_ID_COL).getValue();
+    let txId3 = "'" + sht1.getRange(1 + idRow1, 1 + SHT_TAI_ID_COL).getValue();
     let idMemRow1 = GetMemRow("Discord ID", txId3);
     if(txAftChn1 == "退勤"){
       // 退勤
       // 退勤時は気にせず退勤打刻を行う
-      sheet1.getRange(1 + idRow1 + SHT_KIN_MEM_END_ROW, 1 + idCol2).setValue(txTime1);
-      //let txId3 = "'" + sheet1.getRange(1 + idRow1, 1 + SHT_TAI_ID_COL).getValue();
+      sht1.getRange(1 + idRow1 + SHT_KIN_MEM_END_ROW, 1 + idCol2).setValue(txTime1);
+      //let txId3 = "'" + sht1.getRange(1 + idRow1, 1 + SHT_TAI_ID_COL).getValue();
       //AddLog(txId3);
       //let idMemRow1 = GetMemRow("Discord ID", txId3);
       Akashi_Dakoku(idMemRow1, "退勤", date1);
@@ -348,7 +354,7 @@ function Kintai_Update(sht1, date1, idRow1, txAftSvr1, txAftChn1, txName1){
       let txSta1 = sht1.getRange(1 + idRow1 + SHT_KIN_MEM_STA_ROW, 1 + idCol2).getValue();
       if(txSta1 == ""){
         // 出勤打刻なしなら出勤打刻を行う
-        sheet1.getRange(1 + idRow1 + SHT_KIN_MEM_STA_ROW, 1 + idCol2).setValue(txTime1);
+        sht1.getRange(1 + idRow1 + SHT_KIN_MEM_STA_ROW, 1 + idCol2).setValue(txTime1);
         //let txId3 = "'" + sht1.getRange(1 + idRow1, 1 + SHT_TAI_ID_COL).getValue();
         //let idMemRow1 = GetMemRow("Discord ID", txId3);
         Akashi_Dakoku(idMemRow1, "出勤", date1);
@@ -493,7 +499,7 @@ function GetDayPassTime(date1)
 // ============================================================================
 // 指定のIDの行を取得
 // ============================================================================
-function GetIdRow(txId1, idRowData1, ctRow1, idColId1)
+function GetIdRow(txId1, sht1, idRowData1, ctRow1, idColId1)
 {
   let flNew1 = true;
   // IDから対応メンバーの行を取得
@@ -833,14 +839,14 @@ function Iruca_SetMessage( idRow, msg ){
 // メンバーの状態をデバッグ表示
 function Iruca_writeMenberList(members){
   /*
-  let spreadSheet1 = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet1 = spreadSheet1.getSheetByName("デバッグシート");
+  let spreadsht1 = SpreadsheetApp.getActiveSpreadsheet();
+  let sht1 = spreadsht1.getSheetByName("デバッグシート");
 
   if( members != null ){
     // メンバーの名前,状況を取得
     for( i=0; i<members.length; i++ ){
       if( members[i] != null ){
-        sheet1.appendRow([members[i].id ,members[i].name , members[i].status, members[i].message ]);
+        sht1.appendRow([members[i].id ,members[i].name , members[i].status, members[i].message ]);
       }
     }
   }
